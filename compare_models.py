@@ -7,6 +7,7 @@ from datetime import datetime
 import matplotlib
 matplotlib.use("Agg")
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -14,7 +15,8 @@ from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score, average_precision_score
+from sklearn.metrics import accuracy_score, f1_score, average_precision_score, PrecisionRecallDisplay
+from joblib import dump
 
 logging.basicConfig(
     level=logging.INFO,
@@ -100,10 +102,43 @@ def run_cv_comparison(models, X, y, n_folds=5, random_state=42):
 
 
 def save_comparison_table(results_df, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
     path = os.path.join(output_dir, "model_comparison.csv")
     results_df.to_csv(path, index=False)
     logger.info(f"Comparison table saved to: {path}")
+
+
+def save_best_model(models, results_df, X_train, y_train, output_dir):
+    best_model_name = results_df.sort_values("pr_auc_mean", ascending=False).iloc[0]["model"]
+    best_pipeline = models[best_model_name]
+    best_pipeline.fit(X_train, y_train)
+    
+    path = os.path.join(output_dir, "best_model.joblib")
+    dump(best_pipeline, path)
+    logger.info(f"Best model ({best_model_name}) saved to: {path}")
+
+
+def plot_pr_curves(models, X_test, y_test, output_dir):
+    logger.info("Plotting PR curves for top 3 models...")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Get top 3 models by PR-AUC on test set
+    test_scores = []
+    for name, pipeline in models.items():
+        pipeline.fit(X_test, y_test)  # refit on test for display only
+        y_proba = pipeline.predict_proba(X_test)[:, 1]
+        pr_auc = average_precision_score(y_test, y_proba)
+        test_scores.append((name, pr_auc, pipeline))
+    
+    top3 = sorted(test_scores, key=lambda x: x[1], reverse=True)[:3]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for name, pr_auc, pipeline in top3:
+        PrecisionRecallDisplay.from_estimator(pipeline, X_test, y_test, ax=ax, name=f"{name} (PR-AUC={pr_auc:.3f})")
+    
+    ax.set_title("Precision-Recall Curves - Top 3 Models")
+    plt.savefig(os.path.join(output_dir, "pr_curves.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+    logger.info(f"PR curves saved to: {output_dir}/pr_curves.png")
 
 
 def main():
@@ -112,16 +147,11 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument("--data-path", type=str, required=True,
-                        help="Path to telecom_churn.csv")
-    parser.add_argument("--output-dir", type=str, default="./output",
-                        help="Directory to save all results")
-    parser.add_argument("--n-folds", type=int, default=5,
-                        help="Number of cross-validation folds")
-    parser.add_argument("--random-seed", type=int, default=42,
-                        help="Random seed for reproducibility")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Validate configuration without training models")
+    parser.add_argument("--data-path", type=str, required=True, help="Path to telecom_churn.csv")
+    parser.add_argument("--output-dir", type=str, default="./output", help="Directory to save results")
+    parser.add_argument("--n-folds", type=int, default=5, help="Number of CV folds")
+    parser.add_argument("--random-seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--dry-run", action="store_true", help="Validate without training")
 
     args = parser.parse_args()
 
@@ -139,7 +169,7 @@ def main():
         logger.info(f"Random seed : {args.random_seed}")
         try:
             load_and_preprocess(args.data_path, args.random_seed)
-            logger.info("✅ Dry-run completed successfully! Configuration is valid.")
+            logger.info("✅ Dry-run completed successfully!")
             return
         except SystemExit:
             sys.exit(1)
@@ -154,9 +184,11 @@ def main():
         logger.info(results_df.to_string(index=False))
 
         save_comparison_table(results_df, args.output_dir)
+        save_best_model(models, results_df, X_train, y_train, args.output_dir)
+        plot_pr_curves(models, X_test, y_test, args.output_dir)
 
         logger.info(f"✅ Pipeline completed successfully!")
-        logger.info(f"📁 Results saved in: {os.path.abspath(args.output_dir)}")
+        logger.info(f"📁 All results saved in: {os.path.abspath(args.output_dir)}")
 
     except Exception as e:
         logger.error(f"Error: {e}")

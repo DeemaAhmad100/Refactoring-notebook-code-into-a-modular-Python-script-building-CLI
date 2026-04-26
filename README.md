@@ -1,35 +1,30 @@
-# Refactoring-notebook-code-into-a-modular-Python-script-building-CLI
-
 # Telecom Churn Model Comparison - Production CLI
 
-A production-ready command-line tool that compares 6 machine learning models on the Telecom Churn dataset using stratified cross-validation.
+A clean, production-ready command-line tool that compares 6 machine learning models on the Telecom Churn dataset using stratified 5-fold cross-validation.
 
 ## Features
-- Supports `--dry-run` for safe configuration validation
-- Uses `argparse` for clean CLI interface
-- Structured logging instead of print statements
-- Saves all results to the specified output directory
-- Compares: Dummy, Logistic Regression (default + balanced), Decision Tree, Random Forest (default + balanced)
+- Full support for `argparse` CLI with clear help messages
+- Structured logging using Python's `logging` module
+- `--dry-run` mode for safe configuration validation
+- Saves all results (comparison table, best model, plots) to the output directory
+- Compares: Dummy Classifier, Logistic Regression (default + balanced), Decision Tree, Random Forest (default + balanced)
 
 ## Installation
 
 ```bash
 pip install -r requirements.txt
-
-
-
-Usage
-Dry-run (recommended first)
+Usage Examples
+1. Dry-run (recommended before full run)
 Bashpython compare_models.py --data-path data/telecom_churn.csv --dry-run
-Full run
+2. Full Model Comparison
 Bashpython compare_models.py --data-path data/telecom_churn.csv
-With custom options
+3. Full run with custom options
 Bashpython compare_models.py \
   --data-path data/telecom_churn.csv \
   --output-dir ./my_results \
   --n-folds 10 \
   --random-seed 123
-Arguments
+Command Line Arguments
 
 
 
@@ -71,16 +66,23 @@ Arguments
 
 
 
-ArgumentRequiredDefaultDescription--data-pathYes-Path to telecom_churn.csv--output-dirNo./outputDirectory to save results--n-foldsNo5Number of CV folds--random-seedNo42Random seed for reproducibility--dry-runNoFalseValidate without training models
-Output
-The script creates the following in the output directory:
+ArgumentRequiredDefaultDescription--data-pathYes-Path to the telecom_churn.csv file--output-dirNo./outputDirectory where results will be saved--n-foldsNo5Number of cross-validation folds--random-seedNo42Random seed for reproducibility--dry-runNoFalseValidate data and config without training models
+Output Files (saved in --output-dir)
 
-model_comparison.csv - Full comparison table with mean scores
+model_comparison.csv → Full comparison table with mean scores
+best_model.joblib     → The best performing model (by PR-AUC)
+pr_curves.png         → Precision-Recall curves for top 3 models
 
-
-# requirements.txt
-pandas
-numpy
-scikit-learn
-matplotlib
-joblib
+Project Structure
+text.
+├── compare_models.py
+├── requirements.txt
+├── README.md
+├── data/
+│   └── telecom_churn.csv
+└── output/
+    ├── model_comparison.csv
+    ├── best_model.joblib
+    └── pr_curves.png
+Requirements
+See requirements.txt
